@@ -4,6 +4,14 @@
 // See README.md for setup instructions
 // ============================================================
 
+
+// ── Firebase Init ────────────────────────────────────────────
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, getDocs, orderBy, serverTimestamp, increment, writeBatch }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const app = window._fbApp || (window._fbApp = initializeApp(FIREBASE_CONFIG));
+const db  = getFirestore(app);
 const firebaseConfig = {
   apiKey: "AIzaSyBeXaCFZSaKk4vHrzBfrhOAnb0XFg4fwEU",
   authDomain: "wc2026-bets-908e2.firebaseapp.com",
@@ -21,14 +29,6 @@ const DAILY_BONUS = 100;
 
 // Starting balance for new users (€)
 const STARTING_BALANCE = 500;
-
-// ── Firebase Init ────────────────────────────────────────────
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, getDocs, orderBy, serverTimestamp, increment, writeBatch }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-const app = window._fbApp || (window._fbApp = initializeApp(FIREBASE_CONFIG));
-const db  = getFirestore(app);
 
 // ── Helpers ──────────────────────────────────────────────────
 
