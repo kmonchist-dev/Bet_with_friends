@@ -4,17 +4,17 @@
 // See README.md for setup instructions
 // ============================================================
 
-const FIREBASE_CONFIG = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT.firebaseapp.com",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId:             "YOUR_APP_ID"
+const firebaseConfig = {
+  apiKey: "AIzaSyBeXaCFZSaKk4vHrzBfrhOAnb0XFg4fwEU",
+  authDomain: "wc2026-bets-908e2.firebaseapp.com",
+  projectId: "wc2026-bets-908e2",
+  storageBucket: "wc2026-bets-908e2.firebasestorage.app",
+  messagingSenderId: "694210566669",
+  appId: "1:694210566669:web:e07955c1c9f72238821344"
 };
 
 // Admin password — change this to something only you know
-const ADMIN_PASSWORD = "worldcup2026admin";
+const ADMIN_PASSWORD = "fuzachist";
 
 // Daily bonus amount (€)
 const DAILY_BONUS = 100;
