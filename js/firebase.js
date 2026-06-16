@@ -3,7 +3,7 @@
 // ============================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, orderBy, serverTimestamp, increment, writeBatch }
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, serverTimestamp, increment, writeBatch, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ── Config — replace with your Firebase project values ───────
@@ -26,7 +26,7 @@ const DAILY_BONUS = 100;
 const STARTING_BALANCE = 500;
 
 // ── Init ─────────────────────────────────────────────────────
-const app = window._fbApp || (window._fbApp = initializeApp(firebaseConfig));
+const app = window._fbApp || (window._fbApp = initializeApp(FIREBASE_CONFIG));
 const db  = getFirestore(app);
 
 // ── User ─────────────────────────────────────────────────────
@@ -92,9 +92,11 @@ async function placeBet({ userId, matchId, marketId, pick, amount }) {
 
 // ── Bets queries ──────────────────────────────────────────────
 async function getUserBets(userId) {
-  const q    = query(collection(db, "bets"), where("userId", "==", userId), orderBy("placedAt", "desc"));
+  const q    = query(collection(db, "bets"), where("userId", "==", userId));
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Sort client-side to avoid needing a composite Firestore index
+  const bets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return bets.sort((a, b) => (b.placedAt?.toMillis?.() ?? 0) - (a.placedAt?.toMillis?.() ?? 0));
 }
 
 async function getMatchMarketBets(matchId, marketId) {
