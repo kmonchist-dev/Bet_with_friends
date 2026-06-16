@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WC2026 Bets — Admin</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="betting.html">⚽ WC2026</a>
+  <a href="betting.html">← Back to Fixtures</a>
+  <span style="margin-left:auto; color:var(--red); font-weight:700; font-size:0.85rem">🔒 ADMIN</span>
+</nav>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Login gate -->
+<div id="adminGate" class="login-wrap">
+  <div class="login-box">
+    <h1>🔒 Admin Access</h1>
+    <p>Enter the admin password to manage matches.</p>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="adminPwInput" placeholder="Password">
+    </div>
+    <button class="btn btn-primary" style="width:100%" id="adminPwBtn">Unlock</button>
+    <div id="adminPwErr" style="color:var(--red);font-size:0.85rem;margin-top:10px;display:none"></div>
+  </div>
+</div>
+
+<!-- Admin panel (hidden until unlocked) -->
+<div id="adminPanel" style="display:none">
+  <div class="container">
+    <div class="page-header">
+      <h1>Admin Panel</h1>
+      <p>Lock matches before kickoff · Enter results to settle bets</p>
+    </div>
+
+    <!-- Match selector -->
+    <div class="card">
+      <div class="field">
+        <label>Select Match</label>
+        <select id="matchSelect">
+          <option value="">— Pick a match —</option>
+        </select>
+      </div>
+
+      <div id="matchInfo" style="display:none">
+        <div class="flex-center gap-12" style="margin-bottom:16px">
+          <span id="adminHomeFlag" style="font-size:2rem"></span>
+          <span id="adminHomeName" style="font-weight:700; font-size:1.1rem"></span>
+          <span style="color:var(--muted); font-size:1rem; margin:0 4px">vs</span>
+          <span id="adminAwayName" style="font-weight:700; font-size:1.1rem"></span>
+          <span id="adminAwayFlag" style="font-size:2rem"></span>
+          <span id="adminStatusBadge" class="badge" style="margin-left:auto"></span>
+        </div>
+
+        <!-- Lock / Unlock -->
+        <div class="flex gap-8" style="margin-bottom:20px">
+          <button class="btn btn-danger" id="lockBtn">🔒 Lock Betting</button>
+          <button class="btn btn-secondary" id="unlockBtn">🔓 Unlock Betting</button>
+          <button class="btn btn-secondary" id="liveBtn">🔴 Set Live</button>
+        </div>
+
+        <hr class="divider">
+
+        <h3 style="margin-bottom:16px; color:var(--accent)">Enter Match Result</h3>
+
+        <div class="admin-result-grid">
+          <!-- Score -->
+          <div class="field">
+            <label id="scoreHomeLabel">Home Score</label>
+            <input type="number" id="rScoreHome" min="0" max="20" placeholder="0">
+          </div>
+          <div class="field">
+            <label id="scoreAwayLabel">Away Score</label>
+            <input type="number" id="rScoreAway" min="0" max="20" placeholder="0">
+          </div>
+
+          <!-- First goalscorer -->
+          <div class="field" style="grid-column:1/-1">
+            <label>First Goalscorer</label>
+            <div class="player-search-wrap" id="pswFirst">
+              <input type="text" id="rFirstScorer" placeholder="Search player or No Goal…" autocomplete="off"
+                style="background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:9px 12px;width:100%;font-size:0.9rem;outline:none">
+              <div class="player-dropdown" id="pdFirst" style="display:none"></div>
+            </div>
+          </div>
+
+          <!-- Last goalscorer -->
+          <div class="field" style="grid-column:1/-1">
+            <label>Last Goalscorer</label>
+            <div class="player-search-wrap" id="pswLast">
+              <input type="text" id="rLastScorer" placeholder="Search player or No Goal…" autocomplete="off"
+                style="background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:9px 12px;width:100%;font-size:0.9rem;outline:none">
+              <div class="player-dropdown" id="pdLast" style="display:none"></div>
+            </div>
+          </div>
+
+          <!-- Yellow cards -->
+          <div class="field">
+            <label>Total Yellow Cards</label>
+            <input type="number" id="rYellows" min="0" max="20" placeholder="0">
+          </div>
+
+          <!-- First yellow team -->
+          <div class="field">
+            <label>First Yellow Team</label>
+            <select id="rFirstYellow">
+              <option value="none">None</option>
+              <option value="home" id="firstYellowHome">Home</option>
+              <option value="away" id="firstYellowAway">Away</option>
+            </select>
+          </div>
+
+          <!-- Red card -->
+          <div class="field">
+            <label>Red Card?</label>
+            <select id="rRedCard">
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          <!-- First goal minute -->
+          <div class="field">
+            <label>First Goal Minute (blank = no goal)</label>
+            <input type="number" id="rFirstGoalMin" min="1" max="120" placeholder="e.g. 23">
+          </div>
+
+          <!-- Both teams scored -->
+          <div class="field">
+            <label>Both Teams Scored?</label>
+            <select id="rBtts">
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          <!-- Goal in extra time -->
+          <div class="field">
+            <label>Goal in Extra Time?</label>
+            <select id="rExtraTime">
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:16px; display:flex; gap:10px">
+          <button class="btn btn-success" id="settleBtn" style="flex:1">
+            ✅ Settle Match & Pay Out Bets
+          </button>
+        </div>
+
+        <div id="settlePreview" style="margin-top:16px; display:none">
+          <div class="card card-sm" style="background:rgba(34,197,94,0.05); border-color:rgba(34,197,94,0.2)">
+            <strong class="text-green">Preview</strong>
+            <div id="settlePreviewContent" style="margin-top:8px; font-size:0.85rem; color:var(--muted)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent settled -->
+    <div class="card">
+      <h3 style="margin-bottom:14px">All Matches Status</h3>
+      <div id="allMatchesTable"></div>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script type="module">
+import { settleMatch, getMatchResult, getAllBetsForMatch, ADMIN_PASSWORD }
+  from "./js/firebase.js";
+import { db } from "./js/firebase.js";
+import { doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ── Password gate ────────────────────────────────────────────
+document.getElementById("adminPwBtn").addEventListener("click", () => {
+  const pw = document.getElementById("adminPwInput").value;
+  if (pw === ADMIN_PASSWORD) {
+    document.getElementById("adminGate").style.display = "none";
+    document.getElementById("adminPanel").style.display = "block";
+    init();
+  } else {
+    document.getElementById("adminPwErr").textContent = "Wrong password.";
+    document.getElementById("adminPwErr").style.display = "block";
+  }
+});
+document.getElementById("adminPwInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("adminPwBtn").click();
+});
+
+let currentFixture = null;
+let currentPlayers = [];
+
+function init() {
+  const sel = document.getElementById("matchSelect");
+  WC2026.fixtures.forEach(f => {
+    const home = WC2026.teams[f.home];
+    const away = WC2026.teams[f.away];
+    const opt  = document.createElement("option");
+    opt.value  = f.id;
+    opt.textContent = `[${f.group}] ${home.flag}${home.name} vs ${away.flag}${away.name} — ${f.date} — ${f.status.toUpperCase()}`;
+    sel.appendChild(opt);
+  });
+
+  sel.addEventListener("change", () => {
+    const f = WC2026.fixtures.find(x => x.id === sel.value);
+    if (!f) { document.getElementById("matchInfo").style.display = "none"; return; }
+    loadFixture(f);
+  });
+
+  renderAllMatchesTable();
+}
+
+async function loadFixture(f) {
+  currentFixture = f;
+  const home = WC2026.teams[f.home];
+  const away = WC2026.teams[f.away];
+  currentPlayers = [...home.players, ...away.players, "No Goal"];
+
+  document.getElementById("adminHomeFlag").textContent = home.flag;
+  document.getElementById("adminHomeName").textContent = home.name;
+  document.getElementById("adminAwayFlag").textContent = away.flag;
+  document.getElementById("adminAwayName").textContent = away.name;
+
+  const badge = document.getElementById("adminStatusBadge");
+  badge.textContent = f.status.toUpperCase();
+  badge.className   = `badge badge-${f.status}`;
+
+  document.getElementById("scoreHomeLabel").textContent = `${home.name} Goals`;
+  document.getElementById("scoreAwayLabel").textContent = `${away.name} Goals`;
+  document.getElementById("firstYellowHome").textContent = home.name;
+  document.getElementById("firstYellowAway").textContent = away.name;
+
+  // Pre-fill if already settled
+  const existing = await getMatchResult(f.id);
+  if (existing) {
+    document.getElementById("rScoreHome").value    = existing.scoreHome ?? "";
+    document.getElementById("rScoreAway").value    = existing.scoreAway ?? "";
+    document.getElementById("rFirstScorer").value  = existing.firstGoalscorer ?? "";
+    document.getElementById("rLastScorer").value   = existing.lastGoalscorer ?? "";
+    document.getElementById("rYellows").value      = existing.yellowCards ?? "";
+    document.getElementById("rFirstYellow").value  = existing.firstYellowTeam ?? "none";
+    document.getElementById("rRedCard").value      = existing.redCard ?? "no";
+    document.getElementById("rFirstGoalMin").value = existing.firstGoalMinute ?? "";
+    document.getElementById("rBtts").value         = existing.btts ?? "no";
+    document.getElementById("rExtraTime").value    = existing.goalInExtraTime ?? "no";
+  } else {
+    // Clear fields
+    ["rScoreHome","rScoreAway","rFirstScorer","rLastScorer","rYellows","rFirstGoalMin"].forEach(id => {
+      document.getElementById(id).value = "";
+    });
+  }
+
+  document.getElementById("matchInfo").style.display = "block";
+  setupPlayerSearch("rFirstScorer", "pdFirst");
+  setupPlayerSearch("rLastScorer", "pdLast");
+}
+
+function setupPlayerSearch(inputId, dropdownId) {
+  const input    = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+
+  input.addEventListener("input", () => {
+    const q = input.value.toLowerCase();
+    const matches = q.length < 1 ? [] : currentPlayers.filter(p => p.toLowerCase().includes(q));
+    if (!matches.length) { dropdown.style.display = "none"; return; }
+    dropdown.innerHTML = matches.map(p =>
+      `<div class="player-dropdown-item" data-player="${p}">${p}</div>`).join("");
+    dropdown.style.display = "block";
+  });
+  dropdown.addEventListener("click", e => {
+    const player = e.target.closest("[data-player]")?.dataset.player;
+    if (!player) return;
+    input.value = player;
+    dropdown.style.display = "none";
+  });
+  document.addEventListener("click", e => {
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) dropdown.style.display = "none";
+  });
+}
+
+// ── Status controls ──────────────────────────────────────────
+async function setMatchStatus(status) {
+  if (!currentFixture) return;
+  await setDoc(doc(db, "matches", currentFixture.id), { status }, { merge: true });
+  // Also update local data for the session
+  const f = WC2026.fixtures.find(x => x.id === currentFixture.id);
+  if (f) f.status = status;
+  toast(`Match ${status}`, "info");
+  const badge = document.getElementById("adminStatusBadge");
+  badge.textContent = status.toUpperCase();
+  badge.className = `badge badge-${status}`;
+  renderAllMatchesTable();
+}
+
+document.getElementById("lockBtn").addEventListener("click",   () => setMatchStatus("locked"));
+document.getElementById("unlockBtn").addEventListener("click", () => setMatchStatus("upcoming"));
+document.getElementById("liveBtn").addEventListener("click",   () => setMatchStatus("live"));
+
+// ── Settle ───────────────────────────────────────────────────
+document.getElementById("settleBtn").addEventListener("click", async () => {
+  if (!currentFixture) return;
+
+  const scoreHome = parseInt(document.getElementById("rScoreHome").value);
+  const scoreAway = parseInt(document.getElementById("rScoreAway").value);
+
+  if (isNaN(scoreHome) || isNaN(scoreAway)) {
+    toast("Score is required", "error"); return;
+  }
+
+  const firstGoalMin = document.getElementById("rFirstGoalMin").value;
+
+  const result = {
+    scoreHome,
+    scoreAway,
+    winner: scoreHome > scoreAway ? "home" : scoreAway > scoreHome ? "away" : "draw",
+    firstGoalscorer: document.getElementById("rFirstScorer").value || "No Goal",
+    lastGoalscorer:  document.getElementById("rLastScorer").value || "No Goal",
+    yellowCards:     parseInt(document.getElementById("rYellows").value) || 0,
+    firstYellowTeam: document.getElementById("rFirstYellow").value,
+    redCard:         document.getElementById("rRedCard").value,
+    firstGoalMinute: firstGoalMin !== "" ? parseInt(firstGoalMin) : null,
+    btts:            document.getElementById("rBtts").value,
+    goalInExtraTime: document.getElementById("rExtraTime").value,
+    totalGoals:      scoreHome + scoreAway,
+  };
+
+  // Show preview
+  const bets = await getAllBetsForMatch(currentFixture.id);
+  const preview = document.getElementById("settlePreview");
+  document.getElementById("settlePreviewContent").innerHTML =
+    `${bets.length} bets to settle · Result: ${WC2026.teams[currentFixture.home].name} <strong>${scoreHome}-${scoreAway}</strong> ${WC2026.teams[currentFixture.away].name}<br>
+     First scorer: ${result.firstGoalscorer} · Yellows: ${result.yellowCards} · Red: ${result.redCard}`;
+  preview.style.display = "block";
+
+  const btn = document.getElementById("settleBtn");
+  btn.textContent = "Confirm & Settle ✅";
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = "Settling…";
+    try {
+      await settleMatch(currentFixture.id, result, WC2026.fixtures);
+      toast(`✅ Match settled! ${bets.length} bets processed.`, "success");
+      preview.style.display = "none";
+      renderAllMatchesTable();
+    } catch(e) {
+      toast("Error: " + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "✅ Settle Match & Pay Out Bets";
+      btn.onclick = null; // reset to first-click behaviour
+      document.getElementById("settleBtn").addEventListener("click", handleFirstSettle);
+    }
+  };
+});
+
+function handleFirstSettle() {
+  document.getElementById("settleBtn").click();
+}
+
+function renderAllMatchesTable() {
+  const container = document.getElementById("allMatchesTable");
+  container.innerHTML = WC2026.fixtures.map(f => {
+    const home = WC2026.teams[f.home];
+    const away = WC2026.teams[f.away];
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+        <span class="badge badge-group" style="flex-shrink:0">G${f.group}</span>
+        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          ${home.flag}${home.name} vs ${away.flag}${away.name}
+        </span>
+        <span style="color:var(--muted);font-size:0.75rem;flex-shrink:0">${f.date}</span>
+        <span class="badge badge-${f.status}" style="flex-shrink:0">${f.status}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function toast(msg, type="info") {
+  const c = document.getElementById("toastContainer");
+  const t = document.createElement("div");
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 5000);
+}
+</script>
+
+</body>
+</html>

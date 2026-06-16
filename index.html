@@ -1,1 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WC2026 Bets — Login</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
 
+<div class="login-wrap">
+  <div class="login-box">
+    <h1>⚽ WC2026 Bets</h1>
+    <p>Enter your username to join or resume your session. No password needed.</p>
+
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="usernameInput" placeholder="e.g. kmonchist" maxlength="20"
+             autocomplete="off" autocapitalize="none" spellcheck="false">
+    </div>
+
+    <button class="btn btn-primary" style="width:100%" id="loginBtn">
+      Enter →
+    </button>
+
+    <p style="margin-top:16px; font-size:0.78rem; color:var(--muted); text-align:center">
+      Starting balance: <strong style="color:var(--accent)">€500</strong> + <strong style="color:var(--accent)">€100</strong> daily bonus
+    </p>
+
+    <div id="loginError" style="color:var(--red); font-size:0.85rem; margin-top:12px; display:none"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { getOrCreateUser, checkDailyBonus } from "./js/firebase.js";
+
+  const btn   = document.getElementById("loginBtn");
+  const input = document.getElementById("usernameInput");
+  const err   = document.getElementById("loginError");
+
+  async function login() {
+    const username = input.value.trim();
+    if (!username || username.length < 2) {
+      err.textContent = "Username must be at least 2 characters.";
+      err.style.display = "block";
+      return;
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+      err.textContent = "Only letters, numbers, _ and - allowed.";
+      err.style.display = "block";
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Loading…";
+    err.style.display = "none";
+
+    try {
+      const user = await getOrCreateUser(username);
+      sessionStorage.setItem("wc_user", JSON.stringify({ id: user.id, displayName: user.displayName }));
+
+      // Try daily bonus
+      const bonus = await checkDailyBonus(user.id);
+      if (bonus.awarded) {
+        sessionStorage.setItem("wc_bonus", JSON.stringify(bonus));
+      }
+
+      window.location.href = "betting.html";
+    } catch (e) {
+      err.textContent = "Error: " + e.message;
+      err.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Enter →";
+    }
+  }
+
+  btn.addEventListener("click", login);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+  input.focus();
+</script>
+
+</body>
+</html>

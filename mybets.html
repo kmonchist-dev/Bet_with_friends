@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WC2026 Bets — My Bets</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="betting.html">⚽ WC2026</a>
+  <a href="betting.html"><span>Fixtures</span> 📅</a>
+  <a href="mybets.html" class="active"><span>My Bets</span> 🎟️</a>
+  <a href="leaderboard.html"><span>Board</span> 🏆</a>
+  <span class="nav-balance" id="navBalance">€—</span>
+</nav>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="container">
+  <div class="page-header">
+    <h1>My Bets</h1>
+    <p id="betsSummary">Loading…</p>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="pending">Pending</div>
+    <div class="tab" data-tab="won">Won</div>
+    <div class="tab" data-tab="lost">Lost</div>
+    <div class="tab" data-tab="all">All</div>
+  </div>
+
+  <div class="card" id="betsContainer">
+    <div class="empty-state">Loading your bets…</div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script type="module">
+import { getOrCreateUser, getUserBets, getMatchResult } from "./js/firebase.js";
+
+const stored = sessionStorage.getItem("wc_user");
+if (!stored) { window.location.href = "index.html"; }
+const currentUser = JSON.parse(stored);
+
+let allBets = [];
+let activeTab = "pending";
+let resultCache = {};
+
+async function init() {
+  const user = await getOrCreateUser(currentUser.id);
+  document.getElementById("navBalance").textContent = `€${user.balance.toFixed(0)}`;
+
+  allBets = await getUserBets(currentUser.id);
+
+  // Summary
+  const won    = allBets.filter(b => b.status === "won");
+  const lost   = allBets.filter(b => b.status === "lost");
+  const pending= allBets.filter(b => b.status === "pending");
+  const totalWon  = won.reduce((s, b) => s + b.payout, 0);
+  const totalStaked = allBets.reduce((s, b) => s + b.amount, 0);
+
+  document.getElementById("betsSummary").innerHTML =
+    `${allBets.length} bets · <span class="text-green">+€${totalWon.toFixed(0)} won</span> · ${pending.length} pending`;
+
+  // Pre-load results for settled matches
+  const matchIds = [...new Set(allBets.map(b => b.matchId))];
+  await Promise.all(matchIds.map(async id => {
+    resultCache[id] = await getMatchResult(id);
+  }));
+
+  renderBets();
+}
+
+function renderBets() {
+  const container = document.getElementById("betsContainer");
+  let bets = allBets;
+  if (activeTab !== "all") bets = bets.filter(b => b.status === activeTab);
+
+  if (!bets.length) {
+    container.innerHTML = `<div class="empty-state">No bets here yet.</div>`;
+    return;
+  }
+
+  container.innerHTML = bets.map(bet => {
+    const fixture = WC2026.fixtures.find(f => f.id === bet.matchId);
+    const market  = WC2026.marketTemplates.find(m => m.id === bet.marketId);
+    const home    = fixture ? WC2026.teams[fixture.home] : null;
+    const away    = fixture ? WC2026.teams[fixture.away] : null;
+    const result  = resultCache[bet.matchId];
+
+    const matchLabel = fixture
+      ? `${home.flag} ${home.name} vs ${away.flag} ${away.name}`
+      : bet.matchId;
+
+    const pickLabel  = formatPick(bet, fixture, market);
+    const date = fixture ? fixture.date : "";
+
+    let outcomeHTML = "";
+    if (bet.status === "won") {
+      outcomeHTML = `<span class="bet-outcome won">WON</span>`;
+    } else if (bet.status === "lost") {
+      outcomeHTML = `<span class="bet-outcome lost">LOST</span>`;
+    } else {
+      outcomeHTML = `<span class="bet-outcome pending">OPEN</span>`;
+    }
+
+    return `
+      <div class="bet-item">
+        ${outcomeHTML}
+        <div style="flex:1; min-width:0">
+          <div class="fw-bold" style="font-size:0.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">
+            ${matchLabel}
+          </div>
+          <div style="font-size:0.8rem; color:var(--muted); margin-top:2px">
+            ${market?.label || bet.marketId} · <em>${pickLabel}</em>
+          </div>
+          ${result && bet.status !== "pending"
+            ? `<div style="font-size:0.75rem; color:var(--muted); margin-top:1px">
+                Score: ${result.scoreHome}-${result.scoreAway}
+               </div>`
+            : ""}
+        </div>
+        <div style="text-align:right; flex-shrink:0">
+          <div style="font-size:0.82rem; color:var(--muted)">Stake</div>
+          <div class="fw-bold">€${bet.amount}</div>
+          ${bet.status === "won"
+            ? `<div class="text-green fw-bold" style="font-size:0.88rem">+€${bet.payout.toFixed(0)}</div>`
+            : bet.status === "lost"
+            ? `<div class="text-red" style="font-size:0.78rem">-€${bet.amount}</div>`
+            : ""}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function formatPick(bet, fixture, market) {
+  if (!market || !fixture) return bet.pick;
+  const home = WC2026.teams[fixture.home];
+  const away = WC2026.teams[fixture.away];
+
+  if (market.options === "player_list") return bet.pick;
+  if (market.options === "free_score") {
+    const [sh, sa] = bet.pick.split("-");
+    return `${home.name} ${sh}-${sa} ${away.name}`;
+  }
+  if (market.optionLabels) {
+    const raw = market.optionLabels[bet.pick] || bet.pick;
+    return raw.replace("{home}", home.name).replace("{away}", away.name);
+  }
+  return bet.pick;
+}
+
+// Tab switching
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    activeTab = tab.dataset.tab;
+    renderBets();
+  });
+});
+
+await init();
+</script>
+
+</body>
+</html>

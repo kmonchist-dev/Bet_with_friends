@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WC2026 Bets — Fixtures</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="betting.html">⚽ WC2026</a>
+  <a href="betting.html" class="active"><span>Fixtures</span> 📅</a>
+  <a href="mybets.html"><span>My Bets</span> 🎟️</a>
+  <a href="leaderboard.html"><span>Board</span> 🏆</a>
+  <span class="nav-balance" id="navBalance">€—</span>
+</nav>
+
+<!-- TOAST -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- MAIN -->
+<div class="container">
+  <div class="page-header">
+    <h1>Fixtures</h1>
+    <p>Pick a match to place your bets. Betting closes when a match is locked.</p>
+  </div>
+
+  <!-- Group filter -->
+  <div class="group-pills" id="groupPills">
+    <div class="pill active" data-group="all">All</div>
+    <div class="pill" data-group="open">Open</div>
+    <div class="pill" data-group="settled">Settled</div>
+    <div class="pill" data-group="A">A</div>
+    <div class="pill" data-group="B">B</div>
+    <div class="pill" data-group="C">C</div>
+    <div class="pill" data-group="D">D</div>
+    <div class="pill" data-group="E">E</div>
+    <div class="pill" data-group="F">F</div>
+    <div class="pill" data-group="G">G</div>
+    <div class="pill" data-group="H">H</div>
+    <div class="pill" data-group="I">I</div>
+    <div class="pill" data-group="J">J</div>
+    <div class="pill" data-group="K">K</div>
+    <div class="pill" data-group="L">L</div>
+  </div>
+
+  <div id="fixturesList"></div>
+</div>
+
+<!-- BET SLIP -->
+<div class="bet-slip" id="betSlip">
+  <div class="bet-slip-info">
+    <strong id="slipLabel">—</strong>
+    <span id="slipSub">—</span>
+  </div>
+  <div class="bet-amount-wrap">
+    <span style="color:var(--muted);font-size:0.85rem">€</span>
+    <input type="number" class="bet-amount-input" id="betAmount" value="10" min="1" max="99999">
+    <button class="btn btn-primary" id="placeBetBtn">Bet</button>
+    <button class="btn btn-secondary btn-sm" id="cancelBetBtn">✕</button>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script type="module">
+import { getOrCreateUser, checkDailyBonus, placeBet, getMatchResult, getMatchMarketBets }
+  from "./js/firebase.js";
+
+// ── Auth guard ──────────────────────────────────────────────
+const stored = sessionStorage.getItem("wc_user");
+if (!stored) { window.location.href = "index.html"; }
+const currentUser = JSON.parse(stored);
+
+// ── Balance display ─────────────────────────────────────────
+let userBalance = 0;
+async function refreshBalance() {
+  const user = await getOrCreateUser(currentUser.id);
+  userBalance = user.balance;
+  document.getElementById("navBalance").textContent = `€${userBalance.toFixed(0)}`;
+  return user;
+}
+
+// ── Bonus toast ──────────────────────────────────────────────
+const bonusData = sessionStorage.getItem("wc_bonus");
+if (bonusData) {
+  const b = JSON.parse(bonusData);
+  sessionStorage.removeItem("wc_bonus");
+  setTimeout(() => toast(`🎁 Daily bonus +€${b.amount} credited!`, "success"), 800);
+}
+
+// ── State ────────────────────────────────────────────────────
+let selectedPick = null;  // { matchId, marketId, pick, label }
+let activeGroup  = "all";
+let poolOddsCache = {};   // matchId+marketId -> { home: x, draw: x, away: x }
+
+// ── Render fixtures ──────────────────────────────────────────
+function renderFixtures() {
+  const list = document.getElementById("fixturesList");
+  list.innerHTML = "";
+
+  let fixtures = WC2026.fixtures;
+  if (activeGroup === "open")    fixtures = fixtures.filter(f => f.status === "upcoming" || f.status === "live");
+  else if (activeGroup === "settled") fixtures = fixtures.filter(f => f.status === "settled");
+  else if (activeGroup !== "all") fixtures = fixtures.filter(f => f.group === activeGroup);
+
+  if (!fixtures.length) {
+    list.innerHTML = `<div class="empty-state">No fixtures found.</div>`;
+    return;
+  }
+
+  fixtures.forEach(f => {
+    const home = WC2026.teams[f.home];
+    const away = WC2026.teams[f.away];
+    const locked = f.status === "locked" || f.status === "settled";
+
+    const card = document.createElement("div");
+    card.className = `match-card${f.status === "settled" ? " settled" : ""}`;
+    card.id = `match-${f.id}`;
+
+    card.innerHTML = `
+      <div class="match-teams">
+        <div class="match-team">
+          <span class="match-flag">${home.flag}</span>
+          <span class="match-team-name">${home.name}</span>
+        </div>
+        <div class="match-vs">
+          ${f.status === "settled"
+            ? `<div class="match-score" id="score-${f.id}">?-?</div>`
+            : `<div style="font-size:0.75rem">VS</div>`}
+        </div>
+        <div class="match-team away">
+          <span class="match-flag">${away.flag}</span>
+          <span class="match-team-name">${away.name}</span>
+        </div>
+      </div>
+      <div class="match-meta">
+        <span class="badge badge-group">Group ${f.group}</span>
+        <span class="badge badge-${f.status}">${statusLabel(f.status)}</span>
+        <span>📅 ${formatDate(f.date, f.time, f.tz)}</span>
+        <span>📍 ${f.venue.split(",")[0]}</span>
+        ${locked ? "" : `<span style="margin-left:auto; font-size:0.78rem; color:var(--accent2)">Click to bet ▾</span>`}
+      </div>
+      <div class="market-panel" id="markets-${f.id}" style="display:none; margin-top:12px"></div>
+    `;
+
+    if (!locked) {
+      card.addEventListener("click", (e) => {
+        if (e.target.closest(".market-option") || e.target.closest(".bet-slip") || e.target.closest(".player-dropdown")) return;
+        toggleMarkets(f);
+      });
+    }
+
+    list.appendChild(card);
+
+    // Load scores for settled matches
+    if (f.status === "settled") loadScore(f.id);
+  });
+}
+
+async function loadScore(matchId) {
+  const result = await getMatchResult(matchId);
+  const el = document.getElementById(`score-${matchId}`);
+  if (el && result) el.textContent = `${result.scoreHome}-${result.scoreAway}`;
+}
+
+// ── Toggle markets ───────────────────────────────────────────
+let openMatchId = null;
+async function toggleMarkets(fixture) {
+  const panel = document.getElementById(`markets-${fixture.id}`);
+  if (openMatchId === fixture.id) {
+    panel.style.display = "none";
+    openMatchId = null;
+    return;
+  }
+  // Close others
+  if (openMatchId) {
+    const old = document.getElementById(`markets-${openMatchId}`);
+    if (old) old.style.display = "none";
+  }
+  openMatchId = fixture.id;
+  panel.style.display = "block";
+  panel.innerHTML = `<div style="padding:16px; color:var(--muted)">Loading markets…</div>`;
+
+  // Pre-fetch pool odds for this match
+  await fetchPoolOdds(fixture.id);
+  renderMarkets(fixture, panel);
+}
+
+async function fetchPoolOdds(matchId) {
+  const poolMarkets = WC2026.marketTemplates.filter(m => m.type === "pool");
+  for (const market of poolMarkets) {
+    const bets = await getMatchMarketBets(matchId, market.id);
+    const totalPot = bets.reduce((s, b) => s + b.amount, 0);
+    const byPick = {};
+    bets.forEach(b => { byPick[b.pick] = (byPick[b.pick] || 0) + b.amount; });
+    poolOddsCache[`${matchId}-${market.id}`] = { totalPot, byPick };
+  }
+}
+
+function renderMarkets(fixture, panel) {
+  const home = WC2026.teams[fixture.home];
+  const away = WC2026.teams[fixture.away];
+  const allPlayers = [...home.players, ...away.players];
+
+  panel.innerHTML = "";
+
+  for (const market of WC2026.marketTemplates) {
+    const row = document.createElement("div");
+    row.className = "market-row";
+
+    const isPool   = market.type === "pool";
+    const oddsTag  = isPool ? "Pool odds" : `${market.multiplier}x fixed`;
+
+    let optionsHTML = "";
+
+    if (market.options === "player_list") {
+      // Searchable player input
+      optionsHTML = `
+        <div class="player-search-wrap" id="psw-${fixture.id}-${market.id}">
+          <input type="text" class="field input" placeholder="Search player or 'No Goal'…"
+            id="pi-${fixture.id}-${market.id}" autocomplete="off"
+            style="background:var(--card);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:9px 12px;width:100%;font-size:0.9rem;outline:none">
+          <div class="player-dropdown" id="pd-${fixture.id}-${market.id}" style="display:none"></div>
+        </div>
+      `;
+    } else if (market.options === "free_score") {
+      optionsHTML = `
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" min="0" max="20" placeholder="0" id="sh-${fixture.id}"
+            style="width:60px;background:var(--card);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:8px;text-align:center;font-size:1.1rem;font-weight:700;outline:none">
+          <span style="color:var(--muted);font-weight:700">—</span>
+          <input type="number" min="0" max="20" placeholder="0" id="sa-${fixture.id}"
+            style="width:60px;background:var(--card);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:8px;text-align:center;font-size:1.1rem;font-weight:700;outline:none">
+          <button class="btn btn-secondary btn-sm" id="score-pick-${fixture.id}-${market.id}">
+            Select Score
+          </button>
+        </div>
+      `;
+    } else {
+      const options = Array.isArray(market.options) ? market.options : [];
+      optionsHTML = options.map(opt => {
+        let label = (market.optionLabels?.[opt] || opt)
+          .replace("{home}", home.name)
+          .replace("{away}", away.name);
+        let oddsDisplay = "";
+        if (isPool) {
+          const cache = poolOddsCache[`${fixture.id}-${market.id}`] || {};
+          const total = cache.totalPot || 0;
+          const stake = cache.byPick?.[opt] || 0;
+          if (total > 0 && stake > 0) {
+            const impliedOdds = (total / stake).toFixed(1);
+            oddsDisplay = `<span class="market-option-odds">~${impliedOdds}x</span>`;
+          } else {
+            oddsDisplay = `<span class="market-option-odds">Pool</span>`;
+          }
+        } else {
+          oddsDisplay = `<span class="market-option-odds">${market.multiplier}x</span>`;
+        }
+        return `
+          <div class="market-option" data-pick="${opt}"
+               data-match="${fixture.id}" data-market="${market.id}"
+               data-label="${label}">
+            <span class="market-option-name">${label}</span>
+            ${oddsDisplay}
+          </div>`;
+      }).join("");
+    }
+
+    row.innerHTML = `
+      <div class="market-label">
+        ${market.label}
+        <span class="market-odds-tag">${oddsTag}</span>
+      </div>
+      <div class="market-options">${optionsHTML}</div>
+    `;
+
+    panel.appendChild(row);
+
+    // Wire player search
+    if (market.options === "player_list") {
+      const input    = document.getElementById(`pi-${fixture.id}-${market.id}`);
+      const dropdown = document.getElementById(`pd-${fixture.id}-${market.id}`);
+      const searchPlayers = [...allPlayers, "No Goal"];
+
+      input.addEventListener("input", () => {
+        const q = input.value.toLowerCase();
+        const matches = q.length < 1 ? [] : searchPlayers.filter(p => p.toLowerCase().includes(q));
+        if (!matches.length) { dropdown.style.display = "none"; return; }
+        dropdown.innerHTML = matches.map(p =>
+          `<div class="player-dropdown-item" data-player="${p}">${p}</div>`).join("");
+        dropdown.style.display = "block";
+      });
+      dropdown.addEventListener("click", e => {
+        const player = e.target.closest("[data-player]")?.dataset.player;
+        if (!player) return;
+        input.value = player;
+        dropdown.style.display = "none";
+        selectPick(fixture.id, market.id, player, `${market.label}: ${player}`);
+      });
+    }
+
+    // Wire score picker
+    if (market.options === "free_score") {
+      const scoreBtn = document.getElementById(`score-pick-${fixture.id}-${market.id}`);
+      scoreBtn?.addEventListener("click", () => {
+        const sh = parseInt(document.getElementById(`sh-${fixture.id}`)?.value ?? "");
+        const sa = parseInt(document.getElementById(`sa-${fixture.id}`)?.value ?? "");
+        if (isNaN(sh) || isNaN(sa)) { toast("Enter both scores", "error"); return; }
+        const pick = `${sh}-${sa}`;
+        selectPick(fixture.id, market.id, pick, `Exact Score: ${home.name} ${sh}-${sa} ${away.name}`);
+      });
+    }
+  }
+
+  // Wire standard option buttons
+  panel.querySelectorAll(".market-option[data-pick]").forEach(el => {
+    el.addEventListener("click", () => {
+      selectPick(el.dataset.match, el.dataset.market, el.dataset.pick, el.dataset.label);
+    });
+  });
+}
+
+// ── Pick selection ───────────────────────────────────────────
+function selectPick(matchId, marketId, pick, label) {
+  // Deselect previous
+  document.querySelectorAll(".market-option.selected").forEach(e => e.classList.remove("selected"));
+
+  const el = document.querySelector(
+    `.market-option[data-match="${matchId}"][data-market="${marketId}"][data-pick="${pick}"]`
+  );
+  if (el) el.classList.add("selected");
+
+  const fixture = WC2026.fixtures.find(f => f.id === matchId);
+  const market  = WC2026.marketTemplates.find(m => m.id === marketId);
+  const home    = WC2026.teams[fixture.home];
+  const away    = WC2026.teams[fixture.away];
+
+  selectedPick = { matchId, marketId, pick, label };
+
+  document.getElementById("slipLabel").textContent = label;
+  document.getElementById("slipSub").textContent =
+    `${home.flag} ${home.name} vs ${away.flag} ${away.name} · ${market?.label}`;
+  document.getElementById("betSlip").classList.add("visible");
+}
+
+// ── Place bet ────────────────────────────────────────────────
+document.getElementById("placeBetBtn").addEventListener("click", async () => {
+  if (!selectedPick) return;
+  const amount = parseFloat(document.getElementById("betAmount").value);
+  if (isNaN(amount) || amount < 1) { toast("Minimum bet is €1", "error"); return; }
+  if (amount > userBalance) { toast("Insufficient balance!", "error"); return; }
+
+  const btn = document.getElementById("placeBetBtn");
+  btn.disabled = true;
+  btn.textContent = "…";
+
+  try {
+    await placeBet({
+      userId:   currentUser.id,
+      matchId:  selectedPick.matchId,
+      marketId: selectedPick.marketId,
+      pick:     selectedPick.pick,
+      amount
+    });
+    toast(`✅ Bet placed — €${amount} on "${selectedPick.label}"`, "success");
+    cancelBet();
+    await refreshBalance();
+    // Refresh pool odds for this match
+    await fetchPoolOdds(selectedPick.matchId);
+  } catch (e) {
+    toast(e.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Bet";
+  }
+});
+
+document.getElementById("cancelBetBtn").addEventListener("click", cancelBet);
+function cancelBet() {
+  selectedPick = null;
+  document.querySelectorAll(".market-option.selected").forEach(e => e.classList.remove("selected"));
+  document.getElementById("betSlip").classList.remove("visible");
+}
+
+// ── Group filter ─────────────────────────────────────────────
+document.getElementById("groupPills").addEventListener("click", e => {
+  const pill = e.target.closest(".pill");
+  if (!pill) return;
+  document.querySelectorAll(".pill").forEach(p => p.classList.remove("active"));
+  pill.classList.add("active");
+  activeGroup = pill.dataset.group;
+  cancelBet();
+  renderFixtures();
+});
+
+// ── Helpers ──────────────────────────────────────────────────
+function statusLabel(s) {
+  return { upcoming:"Open", locked:"Locked", live:"LIVE", settled:"Settled" }[s] || s;
+}
+function formatDate(date, time, tz) {
+  try {
+    const dt = new Date(`${date}T${time}:00`);
+    return dt.toLocaleDateString("en-GB", { day:"numeric", month:"short" }) + " " + time;
+  } catch { return `${date} ${time}`; }
+}
+
+function toast(msg, type="info") {
+  const c = document.getElementById("toastContainer");
+  const t = document.createElement("div");
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+// ── Init ──────────────────────────────────────────────────────
+await refreshBalance();
+renderFixtures();
+</script>
+
+</body>
+</html>
