@@ -26,7 +26,7 @@ const DAILY_BONUS = 100;
 const STARTING_BALANCE = 500;
 
 // ── Init ─────────────────────────────────────────────────────
-const app = window._fbApp || (window._fbApp = initializeApp(FIREBASE_CONFIG));
+const app = window._fbApp || (window._fbApp = initializeApp(firebaseConfig));
 const db  = getFirestore(app);
 
 // ── User ─────────────────────────────────────────────────────
